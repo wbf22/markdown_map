@@ -173,7 +173,7 @@ html, body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-  cursor: default;
+  cursor: grab;
   user-select: none;
   overflow: hidden;
 }
@@ -192,7 +192,7 @@ html, body {
 }
 
 .image-card .card-header {
-  cursor: grab;
+  cursor: default;
 }
 
 #editor-panel {

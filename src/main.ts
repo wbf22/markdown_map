@@ -10,7 +10,7 @@ interface DirEntry {
 }
 
 interface Positions {
-  [key: string]: { x: number; y: number };
+  [key: string]: { x: number; y: number; w?: number; h?: number };
 }
 
 interface CardData {
@@ -20,6 +20,8 @@ interface CardData {
   el: HTMLElement;
   x: number;
   y: number;
+  w: number;
+  h: number;
 }
 
 let panX = 0;
@@ -84,7 +86,7 @@ async function loadDirectory() {
       const pos = positions[entry.name];
       const x = pos ? pos.x : col * (defaultW + gapX);
       const y = pos ? pos.y : row * 200;
-      await createMdCard(entry, x, y);
+      await createMdCard(entry, x, y, pos?.w, pos?.h);
       col++;
     }
 
@@ -92,7 +94,7 @@ async function loadDirectory() {
       const pos = positions[entry.name];
       const x = pos ? pos.x : col * (defaultW + gapX);
       const y = pos ? pos.y : row * 200;
-      await createImageCard(entry, x, y);
+      await createImageCard(entry, x, y, pos?.w, pos?.h);
       col++;
     }
   } finally {
@@ -123,7 +125,7 @@ function updateViewport() {
   zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
 }
 
-async function createMdCard(entry: DirEntry, x: number, y: number) {
+async function createMdCard(entry: DirEntry, x: number, y: number, w?: number, h?: number) {
   const content = await invoke<string>("read_file", { path: entry.path });
   const html = marked.parse(content, { breaks: true }) as string;
 
@@ -131,13 +133,22 @@ async function createMdCard(entry: DirEntry, x: number, y: number) {
   card.className = "card";
   card.style.left = x + "px";
   card.style.top = y + "px";
-  card.style.width = "300px";
+  card.style.width = (w ?? 300) + "px";
+  if (h) card.style.height = h + "px";
 
   const preview = document.createElement("div");
   preview.className = "card-preview";
   preview.innerHTML = html;
 
   card.appendChild(preview);
+
+  const handle = document.createElement("div");
+  handle.className = "card-resize-handle";
+  handle.addEventListener("pointerdown", (e) => {
+    e.stopPropagation();
+    startResize(card, e);
+  });
+  card.appendChild(handle);
 
   card.addEventListener("pointerdown", (e) => {
     e.stopPropagation();
@@ -147,24 +158,26 @@ async function createMdCard(entry: DirEntry, x: number, y: number) {
 
   canvas.appendChild(card);
 
-  const cd: CardData = { path: entry.path, name: entry.name, type: "md", el: card, x, y };
+  const cd: CardData = { path: entry.path, name: entry.name, type: "md", el: card, x, y, w: w ?? 300, h: h ?? 0 };
   cards.push(cd);
 
   const mdContent = content;
   card.setAttribute("data-md-content", mdContent);
 }
 
-async function createImageCard(entry: DirEntry, x: number, y: number) {
+async function createImageCard(entry: DirEntry, x: number, y: number, w?: number, h?: number) {
   const dataUrl = await invoke<string>("get_image_data_url", { path: entry.path });
 
   const card = document.createElement("div");
   card.className = "image-card";
   card.style.left = x + "px";
   card.style.top = y + "px";
+  if (w) card.style.width = w + "px";
+  if (h) card.style.height = h + "px";
 
   const header = document.createElement("div");
   header.className = "card-header";
-  header.innerHTML = `<span class="card-title">🖼 ${escapeHtml(entry.name)}</span>`;
+  header.innerHTML = `<span class="card-title">${escapeHtml(entry.name)}</span>`;
 
   const img = document.createElement("img");
   img.src = dataUrl;
@@ -173,14 +186,14 @@ async function createImageCard(entry: DirEntry, x: number, y: number) {
   card.appendChild(header);
   card.appendChild(img);
 
-  header.addEventListener("pointerdown", (e) => {
+  card.addEventListener("pointerdown", (e) => {
     e.stopPropagation();
     startDrag(card, entry.name, e);
   });
 
   canvas.appendChild(card);
 
-  const cd: CardData = { path: entry.path, name: entry.name, type: "image", el: card, x, y };
+  const cd: CardData = { path: entry.path, name: entry.name, type: "image", el: card, x, y, w: w ?? 200, h: h ?? 200 };
   cards.push(cd);
 }
 
@@ -248,11 +261,11 @@ async function saveCurrentFile() {
 async function savePositions() {
   const positions: Positions = {};
   for (const card of cards) {
-    const rect = card.el.getBoundingClientRect();
-    const parentRect = canvas.getBoundingClientRect();
     positions[card.name] = {
       x: card.x,
       y: card.y,
+      w: card.el.offsetWidth,
+      h: card.el.offsetHeight,
     };
   }
   try {

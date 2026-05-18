@@ -18,10 +18,12 @@ struct DirEntry {
     modified: u64,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Default)]
 struct Position {
     x: f64,
     y: f64,
+    w: Option<f64>,
+    h: Option<f64>,
 }
 
 fn init_data_dir() {
