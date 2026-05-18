@@ -170,12 +170,15 @@ html, body {
 .card-preview img { max-width: 100%; border-radius: 4px; }
 
 .image-card {
+  position: absolute;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
   cursor: grab;
   user-select: none;
+  -webkit-user-drag: none;
   overflow: hidden;
+  touch-action: none;
 }
 
 .image-card.dragging {
@@ -189,6 +192,9 @@ html, body {
   max-width: 200px;
   max-height: 200px;
   object-fit: contain;
+  pointer-events: none;
+  -webkit-user-drag: none;
+  user-select: none;
 }
 
 .image-card .card-header {
