@@ -1,6 +1,12 @@
 # Bob
 
 Hey cool! Kind of interesting we have this markdown editor here
+| table | test|
+|---|---|
+|hi |   |
+```
+asdf
+```
 
 
 ## test

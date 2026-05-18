@@ -44,6 +44,8 @@ let resizeStartW = 0;
 let resizeStartH = 0;
 let resizeStartX = 0;
 let resizeStartY = 0;
+let dragThreshold = 6;
+let dragDistance = 0;
 
 const canvas = document.getElementById("canvas")!;
 const viewport = document.getElementById("viewport")!;
@@ -54,7 +56,6 @@ const editorPreview = document.getElementById("editor-preview")!;
 const editorFilename = document.getElementById("editor-filename")!;
 const zoomLabel = document.getElementById("zoom-label")!;
 const dirPath = document.getElementById("dir-path")!;
-const emptyDirPath = document.getElementById("empty-dir-path")!;
 const modalOverlay = document.getElementById("modal-overlay")!;
 const modalInput = document.getElementById("modal-input") as HTMLInputElement;
 const toast = document.getElementById("toast")!;
@@ -90,9 +91,6 @@ async function loadDirectory() {
   canvas.innerHTML = "";
   cards = [];
 
-  const emptyState = document.getElementById("empty-state")!;
-  emptyState.classList.toggle("hidden", entries.length > 0);
-
   const mdEntries = entries.filter(e => e.entry_type === "md");
   const imgEntries = entries.filter(e => e.entry_type === "image");
 
@@ -123,41 +121,22 @@ async function createMdCard(entry: DirEntry, x: number, y: number) {
   const content = await invoke<string>("read_file", { path: entry.path });
   const html = marked.parse(content, { breaks: true }) as string;
 
-  const title = extractTitle(content) || entry.name.replace(/\.md$/i, "");
-
   const card = document.createElement("div");
   card.className = "card";
   card.style.left = x + "px";
   card.style.top = y + "px";
   card.style.width = "300px";
 
-  const header = document.createElement("div");
-  header.className = "card-header";
-  header.innerHTML = `<span class="card-title">📄 ${escapeHtml(title)}</span>`;
-
   const preview = document.createElement("div");
   preview.className = "card-preview";
   preview.innerHTML = html;
 
-  const resizeHandle = document.createElement("div");
-  resizeHandle.className = "card-resize-handle";
-
-  card.appendChild(header);
   card.appendChild(preview);
-  card.appendChild(resizeHandle);
 
-  card.addEventListener("click", (e) => {
-    if (!dragCard) openEditor(entry.path, entry.name);
-  });
-
-  header.addEventListener("pointerdown", (e) => {
+  card.addEventListener("pointerdown", (e) => {
     e.stopPropagation();
-    startDrag(card, entry.name, x, y, e);
-  });
-
-  resizeHandle.addEventListener("pointerdown", (e) => {
-    e.stopPropagation();
-    startResize(card, e);
+    dragDistance = 0;
+    startDrag(card, entry.name, e);
   });
 
   canvas.appendChild(card);
@@ -190,7 +169,7 @@ async function createImageCard(entry: DirEntry, x: number, y: number) {
 
   header.addEventListener("pointerdown", (e) => {
     e.stopPropagation();
-    startDrag(card, entry.name, x, y, e);
+    startDrag(card, entry.name, e);
   });
 
   canvas.appendChild(card);
@@ -199,15 +178,13 @@ async function createImageCard(entry: DirEntry, x: number, y: number) {
   cards.push(cd);
 }
 
-function startDrag(card: HTMLElement, name: string, x: number, y: number, e: PointerEvent) {
+function startDrag(card: HTMLElement, name: string, e: PointerEvent) {
   dragCard = cards.find(c => c.name === name) || null;
   if (!dragCard) return;
-  dragCard.x = x;
-  dragCard.y = y;
   dragStartX = e.clientX;
   dragStartY = e.clientY;
-  dragCardStartX = x;
-  dragCardStartY = y;
+  dragCardStartX = dragCard.x;
+  dragCardStartY = dragCard.y;
   card.classList.add("dragging");
   card.setPointerCapture(e.pointerId);
 }
@@ -220,11 +197,6 @@ function startResize(card: HTMLElement, e: PointerEvent) {
   resizeStartX = e.clientX;
   resizeStartY = e.clientY;
   card.setPointerCapture(e.pointerId);
-}
-
-function extractTitle(content: string): string | null {
-  const match = content.match(/^#\s+(.+)/m);
-  return match ? match[1].trim() : null;
 }
 
 function escapeHtml(text: string): string {
@@ -313,6 +285,7 @@ document.addEventListener("pointermove", (e) => {
   if (dragCard) {
     const dx = (e.clientX - dragStartX) / zoom;
     const dy = (e.clientY - dragStartY) / zoom;
+    dragDistance += Math.abs(e.movementX) + Math.abs(e.movementY);
     dragCard.x = dragCardStartX + dx;
     dragCard.y = dragCardStartY + dy;
     dragCard.el.style.left = dragCard.x + "px";
@@ -335,7 +308,11 @@ document.addEventListener("pointerup", () => {
   }
   if (dragCard) {
     dragCard.el.classList.remove("dragging");
-    savePositions();
+    if (dragDistance > dragThreshold) {
+      savePositions();
+    } else if (dragCard.type === "md") {
+      openEditor(dragCard.path, dragCard.name);
+    }
     dragCard = null;
   }
   if (resizeCard) {
@@ -384,7 +361,6 @@ document.getElementById("btn-reset-view")!.addEventListener("click", () => {
 });
 
 document.getElementById("btn-new-file")!.addEventListener("click", showModal);
-document.getElementById("btn-empty-new-file")!.addEventListener("click", showModal);
 
 document.getElementById("modal-confirm")!.addEventListener("click", async () => {
   if (pendingCreate) return;
@@ -458,7 +434,6 @@ editorTextarea.addEventListener("input", () => {
 async function init() {
   const path = await invoke<string>("get_current_directory");
   dirPath.textContent = path;
-  emptyDirPath.textContent = path;
 
   await loadDirectory();
   updateViewport();
