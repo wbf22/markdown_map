@@ -20,13 +20,10 @@ struct Position {
 }
 
 fn get_data_dir() -> PathBuf {
-    // For release builds (.app bundle): use the directory containing the .app
-    // For dev builds: use the current working directory
     if let Ok(exe) = std::env::current_exe() {
         let exe_str = exe.to_string_lossy();
         if exe_str.contains(".app/Contents/MacOS/") {
-            // Go up from: .../Foo.app/Contents/MacOS/markdown-map
-            // to:        .../ (parent of Foo.app)
+            // Running from .app bundle: parent of the .app bundle
             if let Some(macos) = exe.parent() {
                 if let Some(contents) = macos.parent() {
                     if let Some(app_bundle) = contents.parent() {
@@ -37,11 +34,8 @@ fn get_data_dir() -> PathBuf {
                 }
             }
         }
-        // Not in a bundle: use the exe's directory
-        if let Some(dir) = exe.parent() {
-            return dir.to_path_buf();
-        }
     }
+    // Terminal / dev: use the current working directory
     std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
 
