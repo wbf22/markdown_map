@@ -52,7 +52,6 @@ const viewport = document.getElementById("viewport")!;
 const container = document.getElementById("canvas-container")!;
 const editorPanel = document.getElementById("editor-panel")!;
 const editorTextarea = document.getElementById("editor-textarea") as HTMLTextAreaElement;
-const editorPreview = document.getElementById("editor-preview")!;
 const editorFilename = document.getElementById("editor-filename")!;
 const zoomLabel = document.getElementById("zoom-label")!;
 const dirPath = document.getElementById("dir-path")!;
@@ -212,7 +211,6 @@ async function openEditor(path: string, name: string) {
   currentEditFile = path;
   editorFilename.textContent = name;
   editorTextarea.value = content;
-  renderPreview(content);
   editorPanel.classList.remove("hidden");
   editorOpen = true;
   editorTextarea.focus();
@@ -223,7 +221,6 @@ function closeEditor() {
   editorOpen = false;
   currentEditFile = "";
   editorTextarea.value = "";
-  editorPreview.innerHTML = "";
 }
 
 async function saveCurrentFile() {
@@ -239,10 +236,6 @@ async function saveCurrentFile() {
   } catch (e) {
     console.error("Save failed:", e);
   }
-}
-
-function renderPreview(content: string) {
-  editorPreview.innerHTML = marked.parse(content, { breaks: true }) as string;
 }
 
 async function savePositions() {
@@ -426,7 +419,6 @@ document.addEventListener("keydown", (e) => {
 });
 
 editorTextarea.addEventListener("input", () => {
-  renderPreview(editorTextarea.value);
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => saveCurrentFile(), 500);
 });

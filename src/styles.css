@@ -252,34 +252,6 @@ html, body {
   flex-direction: column;
 }
 
-#editor-panes {
-  flex: 1;
-  display: flex;
-  overflow: hidden;
-}
-
-.editor-pane {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.editor-pane:first-child {
-  border-right: 1px solid var(--border);
-}
-
-.pane-label {
-  padding: 6px 12px;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-dim);
-  background: rgba(0,0,0,0.2);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
 #editor-textarea {
   flex: 1;
   background: var(--bg);
@@ -294,61 +266,6 @@ html, body {
   tab-size: 2;
   overflow: auto;
 }
-
-#editor-preview {
-  flex: 1;
-  overflow: auto;
-  padding: 16px;
-  font-size: 14px;
-  line-height: 1.7;
-}
-
-#editor-preview h1, #editor-preview h2, #editor-preview h3 {
-  margin: 16px 0 8px;
-}
-
-#editor-preview h1 { font-size: 1.6em; }
-#editor-preview h2 { font-size: 1.3em; }
-#editor-preview h3 { font-size: 1.1em; }
-
-#editor-preview p { margin: 8px 0; }
-#editor-preview code {
-  background: rgba(255,255,255,0.1);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: 'SF Mono', 'Fira Code', monospace;
-  font-size: 0.9em;
-}
-
-#editor-preview pre {
-  background: rgba(0,0,0,0.3);
-  padding: 12px;
-  border-radius: 6px;
-  overflow-x: auto;
-  margin: 12px 0;
-}
-
-#editor-preview pre code {
-  background: none;
-  padding: 0;
-}
-
-#editor-preview ul, #editor-preview ol {
-  margin: 8px 0 8px 20px;
-}
-
-#editor-preview blockquote {
-  border-left: 3px solid var(--accent);
-  padding-left: 12px;
-  color: var(--text-dim);
-  margin: 12px 0;
-}
-
-#editor-preview a { color: var(--accent); }
-#editor-preview img { max-width: 100%; border-radius: 4px; }
-#editor-preview table { border-collapse: collapse; width: 100%; margin: 12px 0; }
-#editor-preview th, #editor-preview td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
-#editor-preview th { background: var(--surface-2); }
 
 #toolbar {
   position: fixed;
@@ -412,16 +329,10 @@ html, body {
 #dir-display {
   display: flex;
   align-items: center;
-  gap: 8px;
   flex: 1;
   min-width: 0;
   font-size: 13px;
   color: var(--text-dim);
-}
-
-#dir-icon {
-  font-size: 16px;
-  flex-shrink: 0;
 }
 
 #dir-path {
