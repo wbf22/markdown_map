@@ -3,7 +3,12 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
 use tauri::{AppHandle, Emitter};
+use tauri_plugin_dialog::DialogExt;
+
+static DATA_DIR: OnceLock<Mutex<PathBuf>> = OnceLock::new();
+static FILE_WATCHER: OnceLock<Mutex<Option<RecommendedWatcher>>> = OnceLock::new();
 
 #[derive(Clone, Serialize)]
 struct DirEntry {
@@ -19,24 +24,72 @@ struct Position {
     y: f64,
 }
 
-fn get_data_dir() -> PathBuf {
-    if let Ok(exe) = std::env::current_exe() {
+fn init_data_dir() {
+    let dir = if let Ok(exe) = std::env::current_exe() {
         let exe_str = exe.to_string_lossy();
         if exe_str.contains(".app/Contents/MacOS/") {
-            // Running from .app bundle: parent of the .app bundle
-            if let Some(macos) = exe.parent() {
-                if let Some(contents) = macos.parent() {
-                    if let Some(app_bundle) = contents.parent() {
-                        if let Some(parent) = app_bundle.parent() {
-                            return parent.to_path_buf();
-                        }
+            let mut p = exe.clone();
+            p.pop(); p.pop(); p.pop(); // MacOS → Contents → Foo.app
+            if let Some(parent) = p.parent() {
+                parent.to_path_buf()
+            } else {
+                std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+            }
+        } else {
+            std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+        }
+    } else {
+        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    };
+    DATA_DIR.get_or_init(|| Mutex::new(dir));
+    FILE_WATCHER.get_or_init(|| Mutex::new(None));
+}
+
+fn get_data_dir() -> PathBuf {
+    DATA_DIR.get().unwrap().lock().unwrap().clone()
+}
+
+fn set_data_dir(path: PathBuf) {
+    *DATA_DIR.get().unwrap().lock().unwrap() = path;
+}
+
+fn start_watcher(app_handle: AppHandle) {
+    let dir = get_data_dir();
+    let handle = app_handle.clone();
+    let (tx, rx) = std::sync::mpsc::channel();
+
+    let mut watcher = RecommendedWatcher::new(
+        move |res: Result<notify::Event, notify::Error>| {
+            let _ = tx.send(res);
+        },
+        notify::Config::default(),
+    )
+    .ok();
+
+    if let Some(ref mut w) = watcher {
+        let _ = w.watch(&dir, RecursiveMode::NonRecursive);
+    }
+
+    *FILE_WATCHER.get().unwrap().lock().unwrap() = watcher;
+
+    std::thread::spawn(move || {
+        for res in rx {
+            if let Ok(event) = res {
+                let is_relevant = event.paths.iter().any(|p| {
+                    if let Some(ext) = p.extension() {
+                        let e = ext.to_string_lossy().to_lowercase();
+                        e == "md" || ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"].contains(&e.as_str())
+                    } else {
+                        false
                     }
+                });
+                if is_relevant {
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    let _ = handle.emit("files-changed", ());
                 }
             }
         }
-    }
-    // Terminal / dev: use the current working directory
-    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    });
 }
 
 fn list_directory_files() -> Vec<DirEntry> {
@@ -142,6 +195,28 @@ fn get_image_data_url(path: String) -> Result<String, String> {
     Ok(format!("data:{};base64,{}", mime, b64))
 }
 
+#[tauri::command]
+async fn pick_directory(app: AppHandle) -> Result<String, String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+
+    app.dialog()
+        .file()
+        .pick_folder(move |path| {
+            let _ = tx.send(path);
+        });
+
+    match rx.await {
+        Ok(Some(file_path)) => {
+            let pb = PathBuf::from(file_path.to_string());
+            set_data_dir(pb.clone());
+            start_watcher(app);
+            Ok(pb.to_string_lossy().to_string())
+        }
+        Ok(None) => Err("cancelled".to_string()),
+        Err(_) => Err("cancelled".to_string()),
+    }
+}
+
 fn base64_encode(data: &[u8]) -> String {
     const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut result = String::new();
@@ -165,49 +240,13 @@ fn base64_encode(data: &[u8]) -> String {
     result
 }
 
-fn setup_file_watcher(app_handle: AppHandle) {
-    let dir = get_data_dir();
-    let app_handle_clone = app_handle.clone();
-
-    std::thread::spawn(move || {
-        let (tx, rx) = std::sync::mpsc::channel();
-
-        let mut watcher = RecommendedWatcher::new(
-            move |res: Result<notify::Event, notify::Error>| {
-                let _ = tx.send(res);
-            },
-            notify::Config::default(),
-        )
-        .ok();
-
-        if let Some(ref mut w) = watcher {
-            let _ = w.watch(&dir, RecursiveMode::NonRecursive);
-        }
-
-        for res in rx {
-            if let Ok(event) = res {
-                let is_relevant = event.paths.iter().any(|p| {
-                    if let Some(ext) = p.extension() {
-                        let e = ext.to_string_lossy().to_lowercase();
-                        e == "md" || ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"].contains(&e.as_str())
-                    } else {
-                        false
-                    }
-                });
-
-                if is_relevant {
-                    std::thread::sleep(std::time::Duration::from_millis(100));
-                    let _ = app_handle_clone.emit("files-changed", ());
-                }
-            }
-        }
-    });
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    init_data_dir();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             read_directory,
             read_file,
@@ -216,9 +255,10 @@ pub fn run() {
             write_positions,
             get_image_data_url,
             get_current_directory,
+            pick_directory,
         ])
         .setup(|app| {
-            setup_file_watcher(app.handle().clone());
+            start_watcher(app.handle().clone());
             Ok(())
         })
         .run(tauri::generate_context!())

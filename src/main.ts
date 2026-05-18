@@ -59,6 +59,46 @@ const modalOverlay = document.getElementById("modal-overlay")!;
 const modalInput = document.getElementById("modal-input") as HTMLInputElement;
 const toast = document.getElementById("toast")!;
 let pendingCreate = false;
+let loadingDir = false;
+
+async function loadDirectory() {
+  if (loadingDir) return;
+  loadingDir = true;
+  try {
+    const entries: DirEntry[] = await invoke("read_directory");
+    const positions: Positions = await invoke("read_positions");
+
+    canvas.innerHTML = "";
+    cards = [];
+
+    const mdEntries = entries.filter(e => e.entry_type === "md");
+    const imgEntries = entries.filter(e => e.entry_type === "image");
+
+    let col = 0;
+    let row = 0;
+    const gapX = 30;
+    const gapY = 30;
+    const defaultW = 300;
+
+    for (const entry of mdEntries) {
+      const pos = positions[entry.name];
+      const x = pos ? pos.x : col * (defaultW + gapX);
+      const y = pos ? pos.y : row * 200;
+      await createMdCard(entry, x, y);
+      col++;
+    }
+
+    for (const entry of imgEntries) {
+      const pos = positions[entry.name];
+      const x = pos ? pos.x : col * (defaultW + gapX);
+      const y = pos ? pos.y : row * 200;
+      await createImageCard(entry, x, y);
+      col++;
+    }
+  } finally {
+    loadingDir = false;
+  }
+}
 
 function showToast(msg: string) {
   toast.textContent = msg;
@@ -81,39 +121,6 @@ function hideModal() {
 function updateViewport() {
   viewport.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
   zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
-}
-
-async function loadDirectory() {
-  const entries: DirEntry[] = await invoke("read_directory");
-  const positions: Positions = await invoke("read_positions");
-
-  canvas.innerHTML = "";
-  cards = [];
-
-  const mdEntries = entries.filter(e => e.entry_type === "md");
-  const imgEntries = entries.filter(e => e.entry_type === "image");
-
-  let col = 0;
-  let row = 0;
-  const gapX = 30;
-  const gapY = 30;
-  const defaultW = 300;
-
-  for (const entry of mdEntries) {
-    const pos = positions[entry.name];
-    const x = pos ? pos.x : col * (defaultW + gapX);
-    const y = pos ? pos.y : row * 200;
-    await createMdCard(entry, x, y);
-    col++;
-  }
-
-  for (const entry of imgEntries) {
-    const pos = positions[entry.name];
-    const x = pos ? pos.x : col * (defaultW + gapX);
-    const y = pos ? pos.y : row * 200;
-    await createImageCard(entry, x, y);
-    col++;
-  }
 }
 
 async function createMdCard(entry: DirEntry, x: number, y: number) {
@@ -423,12 +430,34 @@ editorTextarea.addEventListener("input", () => {
   saveTimer = setTimeout(() => saveCurrentFile(), 500);
 });
 
+async function pickFolder() {
+  try {
+    const path = await invoke<string>("pick_directory");
+    dirPath.textContent = path;
+    await loadDirectory();
+    updateViewport();
+    showToast("Opened: " + path);
+  } catch (e) {
+    // cancelled
+  }
+}
+
 async function init() {
   const path = await invoke<string>("get_current_directory");
   dirPath.textContent = path;
 
+  dirPath.style.cursor = "pointer";
+  dirPath.style.textDecoration = "underline dotted";
+  dirPath.addEventListener("click", pickFolder);
+
   await loadDirectory();
   updateViewport();
+
+  if (cards.length === 0) {
+    showToast("No files found. Select a folder to open.");
+    pickFolder();
+  }
+
   listen("files-changed", () => {
     loadDirectory();
   });
