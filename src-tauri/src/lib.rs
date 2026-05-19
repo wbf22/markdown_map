@@ -160,7 +160,7 @@ fn write_file(path: String, content: String) -> Result<(), String> {
 
 #[tauri::command]
 fn read_positions() -> HashMap<String, Position> {
-    let positions_path = get_data_dir().join("positions.json");
+    let positions_path = get_data_dir().join("markdown_map.json");
     if let Ok(data) = fs::read_to_string(&positions_path) {
         serde_json::from_str(&data).unwrap_or_default()
     } else {
@@ -170,7 +170,7 @@ fn read_positions() -> HashMap<String, Position> {
 
 #[tauri::command]
 fn write_positions(positions: HashMap<String, Position>) -> Result<(), String> {
-    let positions_path = get_data_dir().join("positions.json");
+    let positions_path = get_data_dir().join("markdown_map.json");
     let data = serde_json::to_string_pretty(&positions).map_err(|e| e.to_string())?;
     fs::write(positions_path, data).map_err(|e| e.to_string())
 }

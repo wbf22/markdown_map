@@ -39,5 +39,5 @@ The release binary is written to `src-tauri/target/release/markdown-map`. On mac
 - **Edit a file** — click a card (don't drag) to open the editor panel
 - **Create a new file** — click the **New File** button in the top bar
 - **Switch directory** — click the directory path in the top bar
-- Positions and card sizes are saved automatically to `positions.json` in the working directory.
+- Positions and card sizes are saved automatically to `markdown_map.json` in the working directory.
 
